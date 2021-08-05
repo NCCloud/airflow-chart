@@ -198,32 +198,22 @@ spec:
             - "/usr/bin/dumb-init"
             - "--"
           args:
-            - "bash"
-            - "-c"
-            - >
+            - bash
+            - -c
+            - |
               true \
-              {{- if gt .Values.workers.initialStartupDelay 0.0 }}
-               && echo "*** waiting {{ .Values.workers.initialStartupDelay }}s..." \
-               && sleep {{ .Values.workers.initialStartupDelay }} \
-              {{- end }}
                && mkdir -p /home/airflow/.local/bin \
                && echo 'export PATH="/home/airflow/.local/bin:$PATH"' >> /home/airflow/airflow_env.sh \
-               && echo 'export AIRFLOW__CORE__SQL_ALCHEMY_CONN="{{ include "airflow.connection.alchemy" . }}"' >> /home/airflow/airflow_env.sh \
-              {{- if (eq .Values.airflow.executor "CeleryExecutor") }}
-               && echo 'export AIRFLOW__CELERY__RESULT_BACKEND="{{ include "airflow.connection.celery.backend" . }}"' >> /home/airflow/airflow_env.sh \
-               && echo 'export AIRFLOW__CELERY__BROKER_URL="{{ include "airflow.connection.celery.broker" . }}"' >> /home/airflow/airflow_env.sh \
-              {{- end }}
+               && echo 'export AIRFLOW__CORE__SQL_ALCHEMY_CONN="postgresql+psycopg2://${DATABASE_USER}:$( echo ${DATABASE_PASSWORD} | python3 -c "import urllib.parse; encoded_pass = urllib.parse.quote(input()); print(encoded_pass)" )@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_DB}"' >> /home/airflow/airflow_env.sh \
+               && echo 'export AIRFLOW__CELERY__RESULT_BACKEND="db+postgresql://${DATABASE_USER}:$( echo ${DATABASE_PASSWORD} | python3 -c "import urllib.parse; encoded_pass = urllib.parse.quote(input()); print(encoded_pass)" )@${DATABASE_HOST}:${DATABASE_PORT}/${DATABASE_DB}"' >> /home/airflow/airflow_env.sh \
+               && echo 'export AIRFLOW__CELERY__BROKER_URL="redis://$( echo ${REDIS_PASSWORD} | python3 -c "import urllib.parse; encoded_pass = urllib.parse.quote(input()); print(f\":{encoded_pass}@\") if len(encoded_pass) > 0 else None" )${REDIS_HOST}:${REDIS_PORT}/${REDIS_DBNUM}"' >> /home/airflow/airflow_env.sh \
                && echo 'source /home/airflow/airflow_env.sh' >> /home/airflow/.profile \
                && echo 'source /home/airflow/airflow_env.sh' >> /home/airflow/.bashrc \
                && source /home/airflow/airflow_env.sh \
-              {{- if .Values.dags.installRequirements }}
                && echo "*** installing requirements..." \
                && /home/airflow/scripts/install-requirements.sh \
-              {{- end }}
-              {{- if .Values.airflow.extraPipPackages }}
                && echo "*** installing global extra pip packages..." \
-               && pip install --user {{ range .Values.airflow.extraPipPackages }} {{ . | quote }} {{ end }} \
-              {{- end }}
+               && pip install --user  "flask-bcrypt~=0.7.1"  "pandas~=1.1.0"  "pyarrow~=1.0.0"  \
                && echo "*** running scheduler..." \
                && exec airflow worker
           ports:
